@@ -100,9 +100,11 @@ import Wire.API.Message
 import Wire.API.User.Client
 
 -- TODO:
--- [ ] replace ref with index in remove proposals
+-- [x] replace ref with index in remove proposals
 -- [ ] validate leaf nodes and key packages locally on galley
 -- [ ] remove MissingSenderClient error
+-- [ ] PreSharedKey proposal
+-- [ ] remove all key package ref mapping
 
 data IncomingMessage = IncomingMessage
   { epoch :: Epoch,
@@ -338,13 +340,13 @@ postMLSCommitBundleToLocalConv qusr c conn bundle lConvOrSubId = do
   senderIdentity <- getSenderIdentity qusr c (Just bundle.sender)
 
   action <- getCommitData lConvOrSub bundle.epoch bundle.commit.rmValue
-  -- check that the welcome message matches the action
-  for_ bundle.welcome $ \welcome ->
-    when
-      ( Set.fromList (map gsNewMember (welSecrets (rmValue welcome)))
-          /= Set.fromList (map (snd . snd) (cmAssocs (paAdd action)))
-      )
-      $ throwS @'MLSWelcomeMismatch
+  -- TODO: check that the welcome message matches the action
+  -- for_ bundle.welcome $ \welcome ->
+  --   when
+  --     ( Set.fromList (map gsNewMember (welSecrets (rmValue welcome)))
+  --         /= Set.fromList (map (snd . snd) (cmAssocs (paAdd action)))
+  --     )
+  --     $ throwS @'MLSWelcomeMismatch
   events <-
     processCommitWithAction
       senderIdentity
@@ -579,10 +581,10 @@ instance Semigroup ProposalAction where
 instance Monoid ProposalAction where
   mempty = ProposalAction mempty mempty mempty
 
-paAddClient :: Qualified (UserId, (ClientId, KeyPackageRef)) -> ProposalAction
+paAddClient :: Qualified (UserId, (ClientId, Word32)) -> ProposalAction
 paAddClient quc = mempty {paAdd = Map.singleton (fmap fst quc) (uncurry Map.singleton (snd (qUnqualified quc)))}
 
-paRemoveClient :: Qualified (UserId, (ClientId, KeyPackageRef)) -> ProposalAction
+paRemoveClient :: Qualified (UserId, (ClientId, Word32)) -> ProposalAction
 paRemoveClient quc = mempty {paRemove = Map.singleton (fmap fst quc) (uncurry Map.singleton (snd (qUnqualified quc)))}
 
 paExternalInitPresent :: ProposalAction
@@ -688,7 +690,7 @@ processExternalCommit senderIdentity lConvOrSub epoch action updatePath =
         throwS @'MLSSubConvClientNotInParent
 
     -- check if there is a key package ref in the remove proposal
-    remRef <-
+    remIndex <-
       if Map.null (paRemove action)
         then pure Nothing
         else do

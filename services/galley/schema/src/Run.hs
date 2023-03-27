@@ -83,6 +83,7 @@ import qualified V77_MLSGroupMemberClient
 import qualified V78_TeamFeatureOutlookCalIntegration
 import qualified V79_TeamFeatureMlsE2EId
 import qualified V80_MLSSubconversation
+import qualified V81_MLSDraft17
 
 main :: IO ()
 main = do
@@ -151,7 +152,8 @@ main = do
       V77_MLSGroupMemberClient.migration,
       V78_TeamFeatureOutlookCalIntegration.migration,
       V79_TeamFeatureMlsE2EId.migration,
-      V80_MLSSubconversation.migration
+      V80_MLSSubconversation.migration,
+      V81_MLSDraft17.migration,
       -- When adding migrations here, don't forget to update
       -- 'schemaVersion' in Galley.Cassandra
       -- (see also docs/developer/cassandra-interaction.md)

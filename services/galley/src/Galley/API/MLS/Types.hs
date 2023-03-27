@@ -27,20 +27,19 @@ import Imports
 import Wire.API.Conversation
 import Wire.API.Conversation.Protocol
 import Wire.API.MLS.Credential
-import Wire.API.MLS.KeyPackage
 import Wire.API.MLS.SubConversation
 
-type ClientMap = Map (Qualified UserId) (Map ClientId KeyPackageRef)
+type ClientMap = Map (Qualified UserId) (Map ClientId Word32)
 
-mkClientMap :: [(Domain, UserId, ClientId, KeyPackageRef)] -> ClientMap
+mkClientMap :: [(Domain, UserId, ClientId, Int32)] -> ClientMap
 mkClientMap = foldr addEntry mempty
   where
-    addEntry :: (Domain, UserId, ClientId, KeyPackageRef) -> ClientMap -> ClientMap
-    addEntry (dom, usr, c, kpr) =
-      Map.insertWith (<>) (Qualified usr dom) (Map.singleton c kpr)
+    addEntry :: (Domain, UserId, ClientId, Int32) -> ClientMap -> ClientMap
+    addEntry (dom, usr, c, kpi) =
+      Map.insertWith (<>) (Qualified usr dom) (Map.singleton c (fromIntegral kpi))
 
-cmLookupRef :: ClientIdentity -> ClientMap -> Maybe KeyPackageRef
-cmLookupRef cid cm = do
+cmLookupIndex :: ClientIdentity -> ClientMap -> Maybe Word32
+cmLookupIndex cid cm = do
   clients <- Map.lookup (cidQualifiedUser cid) cm
   Map.lookup (ciClient cid) clients
 
@@ -54,13 +53,13 @@ cmRemoveClient cid cm = case Map.lookup (cidQualifiedUser cid) cm of
           else Map.insert (cidQualifiedUser cid) clients' cm
 
 isClientMember :: ClientIdentity -> ClientMap -> Bool
-isClientMember ci = isJust . cmLookupRef ci
+isClientMember ci = isJust . cmLookupIndex ci
 
-cmAssocs :: ClientMap -> [(Qualified UserId, (ClientId, KeyPackageRef))]
+cmAssocs :: ClientMap -> [(Qualified UserId, (ClientId, Word32))]
 cmAssocs cm = do
   (quid, clients) <- Map.assocs cm
-  (clientId, ref) <- Map.assocs clients
-  pure (quid, (clientId, ref))
+  (clientId, idx) <- Map.assocs clients
+  pure (quid, (clientId, idx))
 
 -- | Inform a handler for 'POST /conversations/list-ids' if the MLS global team
 -- conversation and the MLS self-conversation should be included in the

@@ -330,6 +330,22 @@ instance ToSchema UnreachableUserList where
         <$> unreachableUsers
           .= array schema
 
+data FailedToProcess = FailedToProcess
+  { send :: UnreachableUserList,
+    add :: UnreachableUserList
+  }
+  deriving (Eq)
+
+instance Semigroup FailedToProcess where
+  ftp1 <> ftp2 =
+    FailedToProcess
+      { send = send ftp1 <> send ftp2,
+        add = add ftp1 <> add ftp2
+      }
+
+instance Monoid FailedToProcess where
+  mempty = FailedToProcess mempty mempty
+
 data MLSMessageSendingStatus = MLSMessageSendingStatus
   { mmssEvents :: [Event],
     mmssTime :: UTCTimeMillis,

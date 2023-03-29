@@ -1,0 +1,540 @@
+new_hypothehtical_things:
+
+  - name: PublicConversation'
+    description:
+      public API type that has all the fields of Converation but
+      without the members list
+
+  - name: Conversation'
+    description:
+      internal conversation type that hold all fields except
+      the member lists
+
+  - name: Push'
+    description:
+      Similar to Push but instead of pushRecipients fields the conversation id + exceptions
+
+  - name: getConversation'
+    description: |
+      :: ConvId
+      -> m (Maybe ConversationWithoutMembers)
+      in Galley.Effects.ConversationStore
+
+  - name: createConversation'
+    description: |
+      :: Local ConvId
+      -> NewConversation
+      -> ConversationStore m ConversationWithoutMembers
+
+  - name: notifyCreatedConversation'
+    description: |
+      :: Local UserId
+      -> Maybe ConnId
+      -> ConvId ->
+      Sem r ()
+
+      in Galley.API.Create
+
+      breaking api change. notifyCreatedConversation returned set of remote UserId
+      that could not be contacted
+
+  - name: newPushLocal'
+    description: |
+      :: ListType
+      -> UserId
+      -> PushEvent
+      -> Maybe Push'
+      in Galley.Intra.Push.Internal
+
+      not clear how to do define this
+
+  - name: push1'
+    desciption: |
+      two stratgies (maybe):
+        strategy 1: consumer loops over pages and calls for each page
+                    this requires that gundeck has fast response times for each call
+        strategy 2: consumer only gives recipients in form of a convid (+ excpetions)
+                    async gundeck fetches recicpients
+
+  - name: pushConversationEvent'
+
+  - name: removeClientsWithClientMap'
+    description: |
+      Local ConvId ->
+      [KeyPackageRef] ->
+      Qualified UserId ->
+      Sem r ()
+
+  - name: isMemberOfLocalConv
+    description: |
+      :: UserId -> ConvId -> m Bool
+
+  - name: hasLocalConvMembers
+    description: |
+      :: ConvId -> m Bool
+      check if conversation has any members
+
+  - name: hasRemoteConvMembers
+    description: |
+      :: ConvId -> m Bool
+
+  - name: isRemoteMember'
+    description: |
+      :: Remote UserId -> ConvId -> m Bool
+
+  - name: isMember'
+    description: |
+      :: Local UserId -> ConvId -> m Bool
+
+  - name: notifyConversationAction'
+    description: |
+      in Galley.API.Action
+      this one is complicated
+
+  - name: propagateMessage'
+    description: |
+      in Galley.API.MLS.Propagate
+
+  - name: getConvLocalMembersPage
+
+  - name: ensureConversationAccess'
+
+  - name: ensureConvAdmin'
+
+  - name: ensureActionAllowed'
+
+  - name: getLocalMember'
+    description:
+      in MemberStor
+
+  - name: ensureMemberLimit'
+
+#
+# Fields:
+#
+# name: name of the function / query / endpoint
+# change: compatible OR breaking
+#   where "compatible" means that the function can be rewritten
+#   but keeps the contract with all of its dependents
+#
+#   where "breaking" means that dependents need to change as well
+#
+functions:
+  - name: Galley.API.Clients.rmClientH
+    change: compatible
+    comments: |
+      member list use by removeClientsWithClientMap
+      to propagate backend remove proposal for client that is leaving conv
+    change_needs:
+      - removeClientsWithClientMap'
+
+  - name: Galley.API.Create.createConnectConversation
+    change: breaking
+    dependents:
+      - client api endpoint "connect"
+    comments: |
+      breaking because of PublicConversationViewWithoutMembers
+    change_needs:
+      - getConversation'
+      - createConversation'
+      - newPushLocal'
+      - push1
+'
+      - notifyCreatedConversation'
+      - isMemberOfLocalConv
+      - hasLocalConvMembers
+
+  - name: Galley.API.Create.createGroupConversationGeneric
+    change: breaking
+    dependents:
+      - Galley.API.Create.createGroupConversationUpToV3
+      - Galley.API.Create.createGroupConversation
+    comments: |
+      wouldnt be able to get (Set (Remote User)) of failedToNotify users
+    change_needs:
+      - createConversation'
+      - getConversation'
+
+  - name: Galley.API.Create.createGroupConversationUpToV3
+    change: breaking
+    comments: |
+      would respond with ResponseForExistedCreated PublicConversation'
+    dependents:
+      - client endpoint "create-group-conversation" v1 v2
+
+  - name: Galley.API.Create.createGroupConversation
+    change: breaking
+    comments: |
+      would respond with ResponseForExistedCreated CreateGroupConversationResponse'
+    dependents:
+      - client endpoint "create-group-conversation" v3
+
+  - name: Galley.API.Federation.onClientRemoved
+    change: compatible
+    comments: |
+      See plan for Galley.API.Clients.rmClientH
+
+  - name: Galley.API.Federation.onUserDeleted
+    change: compatible
+    change_needs:
+      - isRemoteMember'
+      - notifyConversationAction'
+
+  - name: Galley.API.MLS.Util.getLocalConvForUser
+    change: breaking
+    comments: |
+      returns Conversation'
+    dependents:
+      - Galley.API.MLS.GroupInfo.getGroupInfoFromLocalConv
+      - Galley.API.MLS.Message.postMLSCommitBundleToLocalConv
+      - Galley.API.MLS.Message.postMLSMessageToLocalConv
+      - Galley.API.MLS.Message.processExternalCommit
+
+  - name: Galley.API.MLS.GroupInfo.getGroupInfoFromLocalConv
+    change: compatible
+    change_needs:
+      - isMember'
+
+  - name: Galley.API.MLS.Message.postMLSCommitBundleToLocalConv
+    chanage: breaking
+    comments: |
+      Maybe compatible, depends on unreachables, do we need them?
+    change_needs:
+      - isMember'
+      - getConversation'
+      - propagateMessage'
+
+  - name: Galley.API.MLS.Message.postMLSMessageToLocalConv
+    chanage: breaking
+    comments: |
+      Maybe compatible, depends on unreachables, do we need them?
+    change_needs:
+      - isMember'
+      - getConversation'
+
+  - name: Galley.API.MLS.Message.processExternalCommit
+    change: compatible
+    comments: |
+      Argument would change from Conv to ConvId
+    change_needs:
+      - removeClientsWithClientMap'
+
+  - name: Galley.API.LegalHold.handleGroupConvPolicyConflicts
+    change: compatible
+    comments: |
+      This functions need to be kept as blocking.
+    change_needs:
+      - getConvLocalMembersPage
+
+  - name: Galley.API.Message.postQualifiedOtrMessage
+    change: ???
+    comments: |
+      Proteus. Not sure if we want to do this.
+
+  - name: Galley.API.One2One.iUpsertOne2OneConversation
+    change: compatible
+    change_needs:
+      - getConversation'
+      - hasLocalConvMembers
+      - hasRemoteConvMembers
+
+  - name: Galley.API.Query.getConversationByReusableCode
+    change: compatible
+    change_needs:
+      - ensureConversationAccess'
+
+  - name: Galley.API.Query.getConversationGuestLinksStatus
+    change: compatible
+    change_needs:
+      - getConversation'
+      - ensureConvAdmin'
+
+  - name: Galley.API.Query.getLocalSelf
+    change: compatible
+    comments: |
+      Includes weird cleanup code that deletes the conversation if it is not "alive"
+    change_needs:
+      - getLocalMember'
+
+  - name: Galley.API.Query.getMLSSelfConversation
+    change: breaking
+    dependents:
+      - Galley.API.Query.getMLSSelfConversationWithError
+    comments: |
+      Maybe optional?
+      returns PublicConversation'
+    change_needs:
+      - getConversation'
+
+  - name: Galley.API.Query.getMLSSelfConversationWithError
+    change: ???
+    dependents:
+      - client endpoint "get-mls-self-conversation"
+    comments: |
+      Maybe optional?
+
+  - name: Galley.API.Teams.uncheckedDeleteTeamMember
+    change: compatible
+    dependents:
+      - newPushLocal'
+      - push1'
+
+  - name: Galley.API.Create.createLegacyOne2OneConversationUnchecked
+    change: compatible
+    change_needs:
+      - getConversation'
+
+  - name: Galley.API.Create.createOne2OneConversationLocally
+    change: compatible
+    change_needs:
+      - getConversation'
+
+  - name: Galley.API.Create.createProteusSelfConversation
+    change: ???
+    change_needs:
+      - getConversation'
+
+  - name: Galley.API.Update.acceptConv
+    change: compatible
+    change_needs:
+      - getConversation'
+
+  - name: Galley.API.Update.addBot
+    change: compatible
+    change_needs:
+      - isMember'
+      - getLocalMember'
+      - ensureConversationAccess'
+      - ensureMemberLimit'
+
+  - name: Galley.API.Update.addCode
+    change: compatible
+    change_needs:
+      - getConversation'
+      - ensureConvAdmin'
+      - pushConversationEvent'
+
+  - name: Galley.API.Update.blockConv
+    change: compatible
+    change_needs:
+      - getConversation'
+      - isMember'
+
+  - name: Galley.API.Update.checkReusableCode
+    change: compatible
+    change_needs:
+      - getConversation'
+
+  - name: Galley.API.Update.getCode
+    change: compatible
+    change_needs:
+      - getConversation'
+      - isMember'
+
+  - name: Galley.API.Update.joinConversationById
+    change: breaking
+    change_needs:
+      - getConversation'
+
+  - name: Galley.API.Update.rmBot
+    change: compatible
+    change_needs:
+      - getConversation'
+      - isMember'
+      - getLocalMember'
+      - ensureActionAllowed'
+      - push1'
+
+  - name: Galley.API.Update.rmCode
+  - name: Galley.API.Update.unblockConv
+
+  - name: Galley.API.Update.joinConversation
+    change: breaking
+    comments: |
+      This is a big one
+    dependents:
+      - Galley.API.Update.joinConversationById
+      - Galley.API.Update.joinConversationByReusableCode
+    change_needs:
+      - notifyConversationAction'
+
+  - name: Galley.API.Update.joinConversationByReusableCode
+    change: breaking
+    change_needs:
+      - getConversation'
+
+  - name: Galley.API.Util.getConversationWithError
+    change: breaking
+    dependents:
+      - Galley.API.Util.getConversationAndMemberWithError
+      - Galley.API.Util.updateLocalConversation
+    change_needs:
+      - getConversation'
+
+  - name: Galley.API.Util.getConversationAndMemberWithError
+    change: breaking
+    comments: |
+      return (Conversation', mem)
+    dependents:
+      - Galley.API.Query.getBotConversation
+      - Galley.API.Util.getConversationAndCheckMembership
+      - Galley.API.Federation.leaveConversation
+      - Galley.API.Update.memberTyping
+      - Galley.API.Federation.updateTypingIndicator
+
+  - name: Galley.API.Util.getConversationAndCheckMembership
+    change: breaking
+    dependents:
+      - Galley.API.Query.getUnqualifiedConversation
+      - Galley.API.Query.getConversationRoles
+
+  - name: Galley.API.Query.getUnqualifiedConversation
+    change: breaking
+    dependents:
+      - Galley.API.Query.getConversation
+      - client endpoint "get-conversation"
+
+  - name: Galley.API.Query.getConversation
+    change: breaking
+    dependents:
+      - client endpoint "get-conversation"
+
+  - name: Galley.API.Query.getConversationRoles
+    change: compatible
+    change_needs:
+      - getConversation'
+      - isMember'
+
+  - name: Galley.API.Query.getBotConversation
+  - name: Galley.API.Federation.leaveConversation
+  - name: Galley.API.Update.memberTyping
+  - name: Galley.API.Federation.updateTypingIndicator
+
+  - name: Galley.Cassandra.Conversation.localConversation
+  - name: client api endpoint "delete-team-conversation"
+  - name: client api endpoint "get-conversations"
+  - name: client api endpoint "list-conversations" (different versions)
+  - name: federation endpoint "on-conversation-updated"
+  - name: Galley.API.Action.performAction
+    dependents:
+    - Galley.API.Action.updateLocalConversationUnchecked
+  - name: Galley.API.Action.updateLocalConversationUnchecked
+    dependents:
+    - Galley.API.Action.updateLocalConversation
+  - name: Galley.API.Federation.updateConversation
+    dependents:
+    - federation endpoint "on-conversation-updated"
+  - name: Galley.API.Internal.deleteLoop
+    dependents:
+    - ASYNC JOB
+  - name: Galley.API.Query.getConversations
+    dependents:
+    - client api endpoint "get-conversations"
+  - name: Galley.API.Query.iterateConversations
+    dependents:
+    - Galley.API.LegalHold.handleGroupConvPolicyConflicts
+  - name: Galley.API.Query.listConversations
+    dependents:
+    - client api endpoint "list-conversations" (different versions)
+  - name: Galley.API.Teams.deleteTeamConversation
+    dependents:
+    - client api endpoint "delete-team-conversation"
+  - name: Galley.API.Teams.uncheckedDeleteTeam
+    dependents:
+    - Galley.API.Internal.deleteLoop
+  - name: Galley.API.Update.deleteLocalConversation
+    dependents:
+    - Galley.API.Teams.deleteTeamConversation
+  - name: Galley.Cassandra.Conversation.getConversation
+    dependents:
+    - Galley.Effects.ConversationStore.getConversation
+  - name: Galley.Cassandra.Team.deleteTeam
+    dependents:
+    - Galley.Effects.TeamStore.deleteTeam
+  - name: Galley.Effects.TeamStore.deleteTeam
+    dependents:
+    - Galley.API.Teams.uncheckedDeleteTeam
+  - name: Galley.Effects.TeamStore.deleteTeamConversation
+    dependents:
+    - Galley.API.Action.updateLocalConversationUnchecked
+  - name: Galley.Cassandra.Queries.selectMembers
+    dependents:
+    - Galley.Cassandra.Conversation.Members.members
+  - name: Galley.Cassandra.Queries.selectRemoteMembers
+    dependents:
+    - Galley.Cassandra.Conversation.Members.lookupRemoteMembers
+  - name: Galley.API.Action.updateLocalConversation
+    dependents:
+    - Galley.API.Federation.updateConversation
+    - Galley.API.Update.deleteLocalConversation
+  - name: Galley.API.Query.getConversationsInternal
+    dependents:
+    - Galley.API.Query.getConversations
+    - Galley.API.Query.iterateConversations
+  - name: Galley.Cassandra.Conversation.Members.members
+    dependents:
+    - Galley.Effects.ConversationStore.getConversation
+    - Galley.Cassandra.Conversation.deleteConversation
+  - name: Galley.Cassandra.Conversation.deleteConversation
+    dependents:
+    - Galley.Cassandra.Team.removeTeamConv
+    - Galley.Effects.ConversationStore.deleteConversation
+  - name: Galley.Cassandra.Team.removeTeamConv
+    dependents:
+    - Galley.Cassandra.Team.deleteTeam
+    - Galley.Effects.TeamStore.deleteTeamConversation
+  - name: Galley.Cassandra.Conversation.Members.lookupRemoteMembers
+    dependents:
+    - Galley.Cassandra.Conversation.deleteConversation
+    - Galley.Cassandra.Conversation.getConversation
+    - Galley.Cassandra.Conversation.localConversation
+    - Galley.Effects.MemberStore.getRemoteMembers
+  - name: Galley.Effects.ConversationStore.deleteConversation
+    dependents:
+    - Galley.API.Action.performAction
+    - Galley.API.Query.getConversationsInternal
+    - Galley.API.Query.listConversations
+    - Galley.API.Query.getLocalSelf
+  - name: Galley.Effects.ConversationStore.getConversation
+    dependents:
+    - Galley.API.Clients.rmClientH
+    - Galley.API.Create.createGroupConversationGeneric
+    - Galley.API.Create.createProteusSelfConversation
+    - Galley.API.Create.createLegacyOne2OneConversationUnchecked
+    - Galley.API.Create.createOne2OneConversationLocally
+    - Galley.API.Create.createConnectConversation
+    - Galley.API.Federation.onClientRemoved
+    - Galley.API.Federation.onUserDeleted
+    - Galley.API.MLS.Util.getLocalConvForUser
+    - Galley.API.Message.postQualifiedOtrMessage
+    - Galley.API.One2One.iUpsertOne2OneConversation
+    - Galley.API.Query.getConversationByReusableCode
+    - Galley.API.Query.getConversationGuestLinksStatus
+    - Galley.API.Query.getMLSSelfConversation
+    - Galley.API.Teams.uncheckedDeleteTeamMember
+    - Galley.API.Update.acceptConv
+    - Galley.API.Update.blockConv
+    - Galley.API.Update.unblockConv
+    - Galley.API.Update.addCode
+    - Galley.API.Update.rmCode
+    - Galley.API.Update.getCode
+    - Galley.API.Update.checkReusableCode
+    - Galley.API.Update.joinConversationByReusableCode
+    - Galley.API.Update.joinConversationById
+    - Galley.API.Update.addBot
+    - Galley.API.Update.rmBot
+    - Galley.API.Util.getConversationWithError
+  - name: Galley.Cassandra.Conversation.Members.addMembers
+    dependents:
+      - Galley.Cassandra.Conversation.createMLSSelfConversation
+      - Galley.Cassandra.Conversation.createConversation
+      - Galley.Effects.MemberStore.createMember
+  - name: Galley.Cassandra.Conversation.createMLSSelfConversation
+  - name: Galley.Cassandra.Conversation.createConversation
+  - name: Galley.Effects.MemberStore.createMember
+  - name: Galley.Effects.MemberStore.getLocalMembers
+  - name: Galley.Effects.MemberStore.getRemoteMembers
+  - name: Galley.Effects.MemberStore.lookupMLSClients
+  - name: Galley.Effects.MemberStore.getRemoteMembers
+    dependents:
+    - DEAD CODE!
